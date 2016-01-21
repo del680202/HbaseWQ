@@ -189,15 +189,14 @@ class QPSMetric extends Configured {
     var totalNumberOfInsert = 0L
     for (eachResultIndex <- 1 to testResult.length) {
       val eachResult = testResult(eachResultIndex - 1)
-      val numberOfJob = eachResult.size.toFloat
       val spendingTime = eachResult.map(_.spendingMilliseconds).sum
       val numberOfInsert = eachResult.map(_.numberOfInsert).sum
       totalSpendingTime = totalSpendingTime + spendingTime
       totalNumberOfInsert = totalNumberOfInsert + numberOfInsert
       println(s"Job ${eachResultIndex}: " +
-        s"avg. numberOfInsert=${numberOfInsert / numberOfJob}, " +
-        s"avg. spendingTime=${spendingTime / numberOfJob} ms, " +
-        s"avg. QPS=${numberOfInsert / (spendingTime / 1000.0) / numberOfJob}")
+        s"numberOfInsert=${numberOfInsert}, " +
+        s"spendingTime=${spendingTime} ms, " +
+        s"QPS=${numberOfInsert / (spendingTime / 1000.0)}")
     }
     println(s"Total: " +
       s"numberOfInsert=${totalNumberOfInsert}, " +

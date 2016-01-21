@@ -6,12 +6,12 @@ We can adjust properties to test performance in some scenarios.
 
 ```bash
 ...
-Job 1: avg. numberOfInsert=2000.0, avg. spendingTime=320.0 ms, avg. QPS=1250.0
-Job 2: avg. numberOfInsert=2000.0, avg. spendingTime=219.8 ms, avg. QPS=1819.8362147406733
-Job 3: avg. numberOfInsert=2000.0, avg. spendingTime=559.8 ms, avg. QPS=714.5409074669525
-Job 4: avg. numberOfInsert=2000.0, avg. spendingTime=458.6 ms, avg. QPS=872.219799389446
-Job 5: avg. numberOfInsert=2000.0, avg. spendingTime=255.2 ms, avg. QPS=1567.398119122257
-Total: numberOfInsert=50000, spendingTime=9067 ms, QPS=5514.503143266792
+Job 1: numberOfInsert=10000, spendingTime=3593 ms, QPS=2783.1895352073475
+Job 2: numberOfInsert=10000, spendingTime=1684 ms, QPS=5938.242280285036
+Job 3: numberOfInsert=10000, spendingTime=3783 ms, QPS=2643.4047052603755
+Job 4: numberOfInsert=10000, spendingTime=1614 ms, QPS=6195.786864931846
+Job 5: numberOfInsert=10000, spendingTime=2579 ms, QPS=3877.471888328809
+Total: numberOfInsert=50000, spendingTime=13253 ms, QPS=3772.7307024824568
 ```
 
 
