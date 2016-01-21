@@ -52,6 +52,7 @@ numberOfTest=5
 numberOfInsert=10000
 batchMode=true
 batchSize=2000
+cleanTableBeforeTest=false
 cleanTableAfterTest=false
 preCreateRegion=false
 numberOfRegions=8

@@ -26,6 +26,7 @@ case class Config(zooKeeperQuorum: String,
                   numberOfInsert: Int,
                   batchMode: Boolean,
                   batchSize: Int,
+                  cleanTableBeforeTest: Boolean,
                   cleanTableAfterTest: Boolean,
                   preCreateRegion: Boolean,
                   numberOfRegions: Int,
@@ -59,6 +60,7 @@ class QPSMetric extends Configured {
       numberOfInsert = properties.getProperty("numberOfInsert", "10000").toInt,
       batchMode = properties.getProperty("batchMode", "true").toBoolean,
       batchSize = properties.getProperty("batchSize", "1000").toInt,
+      cleanTableBeforeTest = properties.getProperty("cleanTableBeforeTest", "false").toBoolean,
       cleanTableAfterTest = properties.getProperty("cleanTableAfterTest", "false").toBoolean,
       preCreateRegion = properties.getProperty("preCreateRegion", "false").toBoolean,
       numberOfRegions = properties.getProperty("numberOfRegions", "8").toInt,
@@ -89,7 +91,7 @@ class QPSMetric extends Configured {
 
   private def deleteTable(tableName: String) {
     val admin = new HBaseAdmin(getHbaseConfig)
-    if (admin.isTableAvailable(getTestConfig.testTableName)) {
+    if (getTestConfig.cleanTableBeforeTest && admin.isTableAvailable(getTestConfig.testTableName)) {
       admin.disableTable(getTestConfig.testTableName)
       admin.deleteTable(getTestConfig.testTableName)
     }
