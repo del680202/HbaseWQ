@@ -1,4 +1,4 @@
-seWQ
+# HbaseWQ
 A tool for testing QPS of write to measure the performance of HBASE cluster
 We can adjust properties to test performance in some scenarios.
 
@@ -30,8 +30,8 @@ Scala IDE http://scala-ide.org/
 #Run
 
 ```
-$ git clone https://github.com/del680202/komono.git
-$ cd komono
+$ git clone https://github.com/del680202/HbaseWQ.git
+$ cd HbaseWQ
 $ cp conf/wq.conf.template conf/wq.conf
 $ vim conf/wq.conf  #Add hbase cluster setting to config file
 $ sbt test
