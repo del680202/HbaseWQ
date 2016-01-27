@@ -1,5 +1,8 @@
 
 import org.scalatest.FunSuite
+import java.util.concurrent.Executors
+
+
 
 class TestQPSMetric extends FunSuite {
   
@@ -7,5 +10,6 @@ class TestQPSMetric extends FunSuite {
     val qps = new QPSMetric
     qps.loadConfig("conf/wq.conf")
     qps.test()
+    
   }
 }

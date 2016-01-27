@@ -16,6 +16,7 @@ import org.apache.hadoop.conf.Configuration
 import scala.util.Random
 import org.apache.hadoop.hbase.client.Durability
 import java.math.BigInteger
+import java.util.concurrent.Executors
 
 case class Config(zooKeeperQuorum: String,
                   zooKeeperPort: Int,
@@ -24,8 +25,8 @@ case class Config(zooKeeperQuorum: String,
                   autoCreateTable: Boolean,
                   numberOfTest: Int,
                   numberOfInsert: Int,
-                  batchMode: Boolean,
                   batchSize: Int,
+                  numberOfWorker: Int,
                   cleanTableBeforeTest: Boolean,
                   cleanTableAfterTest: Boolean,
                   preCreateRegion: Boolean,
@@ -58,8 +59,8 @@ class QPSMetric extends Configured {
       autoCreateTable = properties.getProperty("autoCreateTable", "false").toBoolean,
       numberOfTest = properties.getProperty("numberOfTest", "5").toInt,
       numberOfInsert = properties.getProperty("numberOfInsert", "10000").toInt,
-      batchMode = properties.getProperty("batchMode", "true").toBoolean,
       batchSize = properties.getProperty("batchSize", "1000").toInt,
+      numberOfWorker = properties.getProperty("numberOfWorker", "1").toInt,
       cleanTableBeforeTest = properties.getProperty("cleanTableBeforeTest", "false").toBoolean,
       cleanTableAfterTest = properties.getProperty("cleanTableAfterTest", "false").toBoolean,
       preCreateRegion = properties.getProperty("preCreateRegion", "false").toBoolean,
@@ -77,11 +78,17 @@ class QPSMetric extends Configured {
     config
   }
 
-  private def buildHTable(): HTable = {
+  private def buildHTables(): java.util.ArrayList[HTable] = {
     if (getTestConfig.autoCreateTable) {
       resetTable(getTestConfig.testTableName)
     }
-    new HTable(getHbaseConfig, getTestConfig.testTableName)
+    val tables = new java.util.ArrayList[HTable]()
+    for (i <- 1 to getTestConfig.numberOfWorker) {
+      val table = new HTable(getHbaseConfig, getTestConfig.testTableName)
+      table.setAutoFlush(getTestConfig.autoFlush)
+      tables.add(table)
+    }
+    tables
   }
 
   private def resetTable(tableName: String) {
@@ -146,53 +153,53 @@ class QPSMetric extends Configured {
     dataset
   }
 
-  private def insertDataToHbase(table: HTable, dataset: java.util.ArrayList[Put]): List[TestResult] = {
+  private def insertDataToHbase(tables:java.util.ArrayList[HTable],
+                                executor:java.util.concurrent.Executor,
+                                dataset: java.util.ArrayList[Put]): TestResult = {
+    
     import collection.JavaConversions._
-    table.setAutoFlush(getTestConfig.autoFlush)
     var result: List[TestResult] = List.empty
-    if (getTestConfig.batchMode) {
-      result = dataset.grouped(getTestConfig.batchSize).map(chunk => measureSpendingTime(chunk.size) {
-        table.put(chunk)
-      }).toList
-    } else {
-      result = dataset.map(put => measureSpendingTime(1) {
-        table.put(put)
-      }).toList
+    var jobs = new java.util.ArrayList[PushWorker]()
+    var table_index = 0
+    val totalTestResult = Util.measureSpendingTime(getTestConfig.numberOfInsert) {
+      for (chunk <- dataset.grouped(getTestConfig.batchSize)) {
+        val job = new PushWorker(tables(table_index), chunk)
+        jobs.add(job)
+        executor.execute(job)
+        table_index = if (table_index >= getTestConfig.numberOfWorker - 1) 0 else table_index + 1
+      }
+      while(jobs.forall(!_.done)){
+        //wait for all job done
+        Thread.sleep(10)
+      }
     }
-    table.flushCommits()
-    result
-  }
-
-  def measureSpendingTime(numberOfInsert: Int)(executingBody: => Unit): TestResult = {
-    val before = System.currentTimeMillis()
-    executingBody
-    val spendingTime = System.currentTimeMillis() - before
-    if (numberOfInsert > 1) {
-      println(s"Handle block data, batchSize=${numberOfInsert}, spendTime=${spendingTime} ms, QPS=${numberOfInsert / (spendingTime / 1000.0)}")
-    }
-    new TestResult(spendingTime, numberOfInsert)
+    totalTestResult
   }
 
   def test() {
-    var table = buildHTable
-    val testResult: Array[List[TestResult]] = new Array(getTestConfig.numberOfTest)
+
+    val testResult: Array[TestResult] = new Array(getTestConfig.numberOfTest)
+    val tables = buildHTables
+    val executor = Executors.newFixedThreadPool(getTestConfig.numberOfWorker)
+    println(s"start workers: num=${getTestConfig.numberOfWorker}")
     for (c <- 1 to getTestConfig.numberOfTest) {
       val dataset = buildTestInsertData
-      testResult(c - 1) = insertDataToHbase(table, dataset)
+      testResult(c - 1) = insertDataToHbase(tables, executor, dataset)
     }
     if (getTestConfig.cleanTableAfterTest) {
       deleteTable(getTestConfig.testTableName)
     }
     report(testResult)
+    executor.shutdown()
   }
 
-  def report(testResult: Array[List[TestResult]]) {
+  def report(testResult: Array[TestResult]) {
     var totalSpendingTime = 0L
     var totalNumberOfInsert = 0L
     for (eachResultIndex <- 1 to testResult.length) {
       val eachResult = testResult(eachResultIndex - 1)
-      val spendingTime = eachResult.map(_.spendingMilliseconds).sum
-      val numberOfInsert = eachResult.map(_.numberOfInsert).sum
+      val spendingTime = eachResult.spendingMilliseconds
+      val numberOfInsert = eachResult.numberOfInsert
       totalSpendingTime = totalSpendingTime + spendingTime
       totalNumberOfInsert = totalNumberOfInsert + numberOfInsert
       println(s"Job ${eachResultIndex}: " +
