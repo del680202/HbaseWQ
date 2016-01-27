@@ -17,6 +17,8 @@ import scala.util.Random
 import org.apache.hadoop.hbase.client.Durability
 import java.math.BigInteger
 import java.util.concurrent.Executors
+import org.apache.hadoop.hbase.client.HTablePool
+import org.apache.hadoop.hbase.client.HTableInterface
 
 case class Config(zooKeeperQuorum: String,
                   zooKeeperPort: Int,
@@ -78,17 +80,13 @@ class QPSMetric extends Configured {
     config
   }
 
-  private def buildHTables(): java.util.ArrayList[HTable] = {
+  private def buildHTables(): HTablePool = {
     if (getTestConfig.autoCreateTable) {
       resetTable(getTestConfig.testTableName)
     }
-    val tables = new java.util.ArrayList[HTable]()
-    for (i <- 1 to getTestConfig.numberOfWorker) {
-      val table = new HTable(getHbaseConfig, getTestConfig.testTableName)
-      table.setAutoFlush(getTestConfig.autoFlush)
-      tables.add(table)
-    }
-    tables
+    val tableNum = (getTestConfig.numberOfWorker / getTestConfig.batchSize) + getTestConfig.numberOfWorker
+    val pool = new HTablePool(getHbaseConfig, tableNum)
+    pool
   }
 
   private def resetTable(tableName: String) {
@@ -153,22 +151,22 @@ class QPSMetric extends Configured {
     dataset
   }
 
-  private def insertDataToHbase(tables:java.util.ArrayList[HTable],
+  private def insertDataToHbase(pool:HTablePool,
                                 executor:java.util.concurrent.Executor,
                                 dataset: java.util.ArrayList[Put]): TestResult = {
     
     import collection.JavaConversions._
     var result: List[TestResult] = List.empty
     var jobs = new java.util.ArrayList[PushWorker]()
-    var table_index = 0
     val totalTestResult = Util.measureSpendingTime(getTestConfig.numberOfInsert) {
       for (chunk <- dataset.grouped(getTestConfig.batchSize)) {
-        val job = new PushWorker(tables(table_index), chunk)
+        val table = pool.getTable(getTestConfig.testTableName)
+        table.setAutoFlush(getTestConfig.autoFlush)
+        val job = new PushWorker(table, chunk, pool)
         jobs.add(job)
         executor.execute(job)
-        table_index = if (table_index >= getTestConfig.numberOfWorker - 1) 0 else table_index + 1
       }
-      while(jobs.forall(!_.done)){
+      while(jobs.exists(!_.done)){
         //wait for all job done
         Thread.sleep(10)
       }
@@ -179,12 +177,12 @@ class QPSMetric extends Configured {
   def test() {
 
     val testResult: Array[TestResult] = new Array(getTestConfig.numberOfTest)
-    val tables = buildHTables
+    val pool = buildHTables
     val executor = Executors.newFixedThreadPool(getTestConfig.numberOfWorker)
     println(s"start workers: num=${getTestConfig.numberOfWorker}")
     for (c <- 1 to getTestConfig.numberOfTest) {
       val dataset = buildTestInsertData
-      testResult(c - 1) = insertDataToHbase(tables, executor, dataset)
+      testResult(c - 1) = insertDataToHbase(pool, executor, dataset)
     }
     if (getTestConfig.cleanTableAfterTest) {
       deleteTable(getTestConfig.testTableName)
